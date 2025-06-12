@@ -13,6 +13,7 @@ contract USCEngine is ReentrancyGuard{
     error USCEngine__AmountMustBeMoreThanZero();
     error USCEngine__TransferFailed();
     error USCEngine__HealthFactorBroken(uint healthFactor);
+    error USCEngine__MintFailed();
 
 
     UnivalStableCoin private immutable I_USC;
@@ -68,6 +69,11 @@ contract USCEngine is ReentrancyGuard{
 
     function mintUSC(uint amountofUSC) public nonReentrant MoreThanZero(amountofUSC){
         s_totalUSCMinted[msg.sender] += amountofUSC;
+        revertIfHealthFactorBroken(msg.sender);
+        bool minted = I_USC.mint(msg.sender,amountofUSC);
+        if(!minted){
+            revert USCEngine__MintFailed();
+        }
     }
 
     function healthCheck(address user) private view returns(uint){

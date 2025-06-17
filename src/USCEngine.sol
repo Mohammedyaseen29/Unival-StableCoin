@@ -58,7 +58,7 @@ contract USCEngine is ReentrancyGuard{
 
     }
 
-    function DepositCollateral(address tokenAddress, uint amount) external MoreThanZero(amount) AllowedToken(tokenAddress) nonReentrant{
+    function DepositCollateral(address tokenAddress, uint amount) public MoreThanZero(amount) AllowedToken(tokenAddress) nonReentrant{
         bool success = IERC20(tokenAddress).transferFrom(msg.sender,address(this),amount);
         if(!success){
             revert USCEngine__TransferFailed();
@@ -75,6 +75,11 @@ contract USCEngine is ReentrancyGuard{
         if(!minted){
             revert USCEngine__MintFailed();
         }
+    }
+
+    function DepositCollateralAndMintUSC(address collateralTokenAddress,uint collateralAmount, uint amountToMint) external {
+        DepositCollateral(collateralTokenAddress,collateralAmount);
+        mintUSC(amountToMint);
     }
 
     function healthCheck(address user) private view returns(uint){

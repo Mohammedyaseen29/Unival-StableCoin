@@ -30,6 +30,7 @@ contract USCEngine is ReentrancyGuard{
 
 
     event CollateralDeposited(address indexed user, address indexed token , uint indexed amount);
+    event CollateralRedeemed(address indexed user,address indexed token, uint indexed amount);
 
 
     modifier AllowedToken(address token) {
@@ -116,5 +117,30 @@ contract USCEngine is ReentrancyGuard{
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
         (,int256 price,,,)= priceFeed.latestRoundData();
         return ((uint(price)*ADDITIONAL_FEED_PRECISION)*amount)/PRECISSION;
+    }
+
+    function redeemCollateral(address collateralTokenAddress,uint CollateralAmount)public MoreThanZero(CollateralAmount) nonReentrant{
+        s_collateralDeposited[msg.sender][collateralTokenAddress] -= CollateralAmount;
+        emit CollateralRedeemed(msg.sender,collateralTokenAddress,CollateralAmount);
+
+        bool success = IERC20(collateralTokenAddress).transfer(msg.sender,CollateralAmount);
+        if(!success){
+            revert USCEngine__TransferFailed();
+        }
+        revertIfHealthFactorBroken(msg.sender);
+    }
+
+    function BurnUSC(uint amountOfUSC) public MoreThanZero(amountOfUSC){
+        s_totalUSCMinted[msg.sender] -= amountOfUSC;
+        bool success = I_USC.transferFrom(msg.sender,address(this),amountOfUSC);
+        if(!success){
+            revert USCEngine__TransferFailed();
+        }
+        I_USC.burn(amountOfUSC);
+        revertIfHealthFactorBroken(msg.sender);
+    }
+    function redeemCollateral(address collateralTokenAddress,uint collateralAmount,uint AmountOfUSCtoBurn)external{
+        BurnUSC(AmountOfUSCtoBurn);
+        redeemCollateral(collateralTokenAddress,collateralAmount);
     }
 }   

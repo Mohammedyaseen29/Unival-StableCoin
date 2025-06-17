@@ -11,7 +11,7 @@ contract DeployUSC is Script {
     address[] public tokenAddress;
     address[] public priceFeedAddress; 
 
-    function run() external returns(UnivalStableCoin,USCEngine){
+    function run() external returns(UnivalStableCoin,USCEngine,HelperConfig){
         HelperConfig config = new HelperConfig();
         (address weth_USD_PriceFeed, address wbtc_USD_PriceFeed,address weth,address wbtc,uint256 deployerKey) = config.activeNetworkCongfig();
         tokenAddress = [weth,wbtc];
@@ -19,8 +19,8 @@ contract DeployUSC is Script {
 
         vm.startBroadcast();
         UnivalStableCoin usc = new UnivalStableCoin();
-        USCEngine engine = new USCEngine(tokenAddress,priceFeedAddress,usc);
+        USCEngine engine = new USCEngine(tokenAddress,priceFeedAddress,address(usc));
         vm.stopBroadcast();
-        return(usc,engine);
+        return(usc,engine,config);
     }
 }

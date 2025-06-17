@@ -11,7 +11,7 @@ contract HelperConfig is Script {
     uint8 public constant DECIMALS = 8;
     int public constant ETH_USD_PRICE = 2000e8;
     int public constant BTC_USD_PRICE = 1000e8;
-    address private constant DEFAULT_ANVIL_PRIVATEKEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+    uint private constant DEFAULT_ANVIL_PRIVATEKEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
 
     struct NetworkConfig {

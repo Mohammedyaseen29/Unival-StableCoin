@@ -15,6 +15,7 @@ contract USCEngine is ReentrancyGuard{
     error USCEngine__TransferFailed();
     error USCEngine__HealthFactorBroken(uint healthFactor);
     error USCEngine__MintFailed();
+    error USCEngine__HealthFactorFine();
 
 
     UnivalStableCoin private immutable I_USC;
@@ -26,6 +27,7 @@ contract USCEngine is ReentrancyGuard{
     uint private constant LIQUIDATION_THRESHOLD = 50; //50% liquidation threshold
     uint private constant LIQUIDATION_PRECISION = 100;
     uint private constant MIN_HEALTH_FACTOR = 1e18;
+    uint private constant LIQUIDATION_BONUS = 10;
     address[] private s_collateralTokens;
 
 
@@ -143,4 +145,14 @@ contract USCEngine is ReentrancyGuard{
         BurnUSC(AmountOfUSCtoBurn);
         redeemCollateral(collateralTokenAddress,collateralAmount);
     }
+    function liquidate(address collateral,address user,uint debtToCover) external MoreThanZero(debtToCover) nonReentrant{
+        uint startingHealthFactor = healthCheck(user);
+        if(startingHealthFactor > MIN_HEALTH_FACTOR){
+            revert USCEngine__HealthFactorFine();
+        }
+        uint totalAmountToCoverDebt = getUSDValue(collateral,debtToCover);
+        uint bonusCollateral = (totalAmountToCoverDebt * LIQUIDATION_BONUS)/LIQUIDATION_PRECISION;
+        uint totalCollateralRedeemed = totalAmountToCoverDebt + bonusCollateral;
+    }
+
 }   

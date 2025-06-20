@@ -87,6 +87,7 @@ contract USCEngine is ReentrancyGuard{
     }
 
     function healthCheck(address user) private view returns(uint){
+        if(s_totalUSCMinted[user] == 0) return type(uint).max;
         (uint mintedUSCToken,uint totalCollateralInUSD) = getUserInformation(user);
         uint CollateralThresholdAmount = (totalCollateralInUSD * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
         return (CollateralThresholdAmount * PRECISSION) / mintedUSCToken;

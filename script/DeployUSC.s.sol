@@ -13,7 +13,7 @@ contract DeployUSC is Script {
 
     function run() external returns(UnivalStableCoin,USCEngine,HelperConfig){
         HelperConfig config = new HelperConfig();
-        (address weth_USD_PriceFeed, address wbtc_USD_PriceFeed,address weth,address wbtc,uint256 deployerKey) = config.activeNetworkCongfig();
+        (address weth_USD_PriceFeed, address wbtc_USD_PriceFeed,address weth,address wbtc,) = config.activeNetworkCongfig();
         tokenAddress = [weth,wbtc];
         priceFeedAddress = [weth_USD_PriceFeed,wbtc_USD_PriceFeed];
 

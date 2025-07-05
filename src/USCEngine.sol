@@ -17,6 +17,8 @@ contract USCEngine is ReentrancyGuard{
     error USCEngine__MintFailed();
     error USCEngine__HealthFactorFine();
     error USCEngine__HealthFactorNotImproved();
+    error USCEngine__InsufficientUSCBalance();
+    error USCEngine__InsufficientTokenBalance();
 
 
     UnivalStableCoin private immutable I_USC;
@@ -58,8 +60,6 @@ contract USCEngine is ReentrancyGuard{
             s_collateralTokens.push(tokenAddresses[i]);
         }
         I_USC = UnivalStableCoin(USCAddress);
-        
-
     }
 
     function DepositCollateral(address tokenAddress, uint amount) public MoreThanZero(amount) AllowedToken(tokenAddress) nonReentrant{
@@ -69,7 +69,6 @@ contract USCEngine is ReentrancyGuard{
         }
         s_collateralDeposited[msg.sender][tokenAddress] += amount;
         emit CollateralDeposited(msg.sender,tokenAddress,amount);
-
     }
 
     function mintUSC(uint amountofUSC) public nonReentrant MoreThanZero(amountofUSC){
@@ -85,7 +84,7 @@ contract USCEngine is ReentrancyGuard{
         DepositCollateral(collateralTokenAddress,collateralAmount);
         mintUSC(amountToMint);
     }
-
+    
     function healthCheck(address user) private view returns(uint){
         if(s_totalUSCMinted[user] == 0) return type(uint).max;
         (uint mintedUSCToken,uint totalCollateralInUSD) = getUserInformation(user);
@@ -106,6 +105,9 @@ contract USCEngine is ReentrancyGuard{
         return (mintedUSCToken,totalCollateralInUSD);
     }
     
+    function getCollateralToken() public view returns(address[] memory){
+        return s_collateralTokens;
+    }
 
 
     function getCollateralValueOfUser(address user) public view returns(uint collaterValueInUSD){
@@ -130,6 +132,9 @@ contract USCEngine is ReentrancyGuard{
     }
 
     function redeemCollateral(address collateralTokenAddress,uint CollateralAmount,address debtor,address liquidator)public MoreThanZero(CollateralAmount) nonReentrant{
+        if(CollateralAmount > s_collateralDeposited[debtor][collateralTokenAddress]){
+            revert USCEngine__InsufficientTokenBalance();
+        }
         s_collateralDeposited[debtor][collateralTokenAddress] -= CollateralAmount;
         emit CollateralRedeemed(debtor,liquidator,collateralTokenAddress,CollateralAmount);
 
@@ -141,6 +146,9 @@ contract USCEngine is ReentrancyGuard{
     }
 
     function BurnUSC(uint amountOfUSC,address debtor,address liquidator) public MoreThanZero(amountOfUSC){
+        if(amountOfUSC > s_totalUSCMinted[debtor]){
+            revert USCEngine__InsufficientUSCBalance();
+        }
         s_totalUSCMinted[debtor] -= amountOfUSC;
         bool success = I_USC.transferFrom(liquidator,address(this),amountOfUSC);
         if(!success){
@@ -148,7 +156,7 @@ contract USCEngine is ReentrancyGuard{
         }
         I_USC.burn(amountOfUSC);
     }
-    function redeemCollateral(address collateralTokenAddress,uint collateralAmount,uint AmountOfUSCtoBurn,address user)external{
+    function redeemReward(address collateralTokenAddress,uint collateralAmount,uint AmountOfUSCtoBurn,address user)public{
         BurnUSC(AmountOfUSCtoBurn,user,msg.sender);
         redeemCollateral(collateralTokenAddress,collateralAmount,user,msg.sender);
     }
@@ -160,8 +168,7 @@ contract USCEngine is ReentrancyGuard{
         uint totalAmountToCoverDebt = getTokenAmountFromUSD(collateral,debtToCover);
         uint bonusCollateral = (totalAmountToCoverDebt * LIQUIDATION_BONUS)/LIQUIDATION_PRECISION;
         uint totalCollateralRedeemed = totalAmountToCoverDebt + bonusCollateral;
-        redeemCollateral(collateral,totalCollateralRedeemed,user,msg.sender);
-        BurnUSC(debtToCover,user,msg.sender);
+        redeemReward(collateral,totalCollateralRedeemed,debtToCover,user);
 
         uint endingHealthFactor = healthCheck(user);
         if(endingHealthFactor <= MIN_HEALTH_FACTOR){

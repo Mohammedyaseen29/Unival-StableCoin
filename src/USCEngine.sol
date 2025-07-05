@@ -19,6 +19,9 @@ contract USCEngine is ReentrancyGuard{
     error USCEngine__HealthFactorNotImproved();
     error USCEngine__InsufficientUSCBalance();
     error USCEngine__InsufficientTokenBalance();
+    error USCEngine__HealthFactorTooLow();
+    error USCEngine__InsufficientMintedBalance();
+    error USCEngine__NotEnoughCollateral();
 
 
     UnivalStableCoin private immutable I_USC;
@@ -177,5 +180,69 @@ contract USCEngine is ReentrancyGuard{
 
         revertIfHealthFactorBroken(msg.sender);
     }
+    function redeemCollateralAsUser(address collateralTokenAddress,uint256 collateralAmount,uint256 uscToBurn) external nonReentrant MoreThanZero(collateralAmount) MoreThanZero(uscToBurn) {
+        uint256 startingHealthFactor = healthCheck(msg.sender);
+        if (startingHealthFactor < MIN_HEALTH_FACTOR) {
+            revert USCEngine__HealthFactorTooLow();
+        }
+
+        if (uscToBurn > s_totalUSCMinted[msg.sender]) {
+            revert USCEngine__InsufficientMintedBalance();
+        }
+
+        if (collateralAmount > s_collateralDeposited[msg.sender][collateralTokenAddress]) {
+            revert USCEngine__NotEnoughCollateral();
+        }
+
+        // Burn USC from sender
+        s_totalUSCMinted[msg.sender] -= uscToBurn;
+        bool success = I_USC.transferFrom(msg.sender, address(this), uscToBurn);
+        if (!success) revert USCEngine__TransferFailed();
+        I_USC.burn(uscToBurn);
+
+        // Return collateral
+        s_collateralDeposited[msg.sender][collateralTokenAddress] -= collateralAmount;
+        success = IERC20(collateralTokenAddress).transfer(msg.sender, collateralAmount);
+        if (!success) revert USCEngine__TransferFailed();
+
+        // Ensure HF remains healthy after redemption
+        revertIfHealthFactorBroken(msg.sender);
+    }
+    function getMaxLiquidatableDebt(address user) public view returns (uint256) {
+        uint256 hf = healthCheck(user);
+        if (hf >= MIN_HEALTH_FACTOR) return 0;
+
+        uint256 debt = s_totalUSCMinted[user];
+        return (debt * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+    }
+    function getLiquidationQuote(address user,address collateralToken) public view returns (uint256 uscToRepay,uint256 collateralToRedeem,uint256 bonusCollateral,uint256 healthFactorBefore,uint256 healthFactorAfter) {
+        healthFactorBefore = healthCheck(user);
+        if (healthFactorBefore >= MIN_HEALTH_FACTOR) {
+            return (0, 0, 0, healthFactorBefore, healthFactorBefore);
+        }
+
+        uscToRepay = getMaxLiquidatableDebt(user);
+        uint256 baseCollateral = getTokenAmountFromUSD(collateralToken, uscToRepay);
+        bonusCollateral = (baseCollateral * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
+        collateralToRedeem = baseCollateral + bonusCollateral;
+
+        // Simulate state after liquidation
+        uint256 newDebt = s_totalUSCMinted[user] - uscToRepay;
+        uint256 newCollateral = s_collateralDeposited[user][collateralToken] - collateralToRedeem;
+
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[collateralToken]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+
+        uint256 collateralValue = (uint256(price) * newCollateral * LIQUIDATION_THRESHOLD)/ (1e8 * LIQUIDATION_PRECISION);
+
+        if (newDebt == 0) {
+            healthFactorAfter = type(uint256).max; // Infinity
+        } else {
+            healthFactorAfter = (collateralValue * 1e18) / newDebt;
+        }
+    }
+
+
+
 
 }   
